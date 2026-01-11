@@ -246,6 +246,10 @@
   const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop"), btnReset = $("reset");
   const speed = $("speed"), speedLbl = $("speedLbl");
 
+  // SOFT RESET STORAGE: last committed (Run) inputs.
+  // Reset restores these; if no Run yet, fall back to defaults.
+  let lastRunInputs = null;
+
   // Chart
   const chart = new Chart($("chart").getContext("2d"), {
     type: "line",
@@ -378,7 +382,7 @@
     ctx.arcTo(x+w, y, x+w, y+h, rr);
     ctx.arcTo(x+w, y+h, x, y+h, rr);
     ctx.arcTo(x, y+h, x, y, rr);
-    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.arcTo(x, y, x+w, y);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -421,84 +425,69 @@
   }
 
   // SHIFT ENTIRE GRAPHIC DOWN to prevent clipping
-  const SCENE_TOP_SHIFT = 48; // <- adjust as needed; solves “weight out of view” across typical h
+  const SCENE_TOP_SHIFT = 48;
 
+  function drawSchematic(sim, tNow, yNow, vNow){
+    const w = canv.width, h = canv.height;
 
-function drawSchematic(sim, tNow, yNow, vNow){
-  const w = canv.width, h = canv.height;
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
+    ctx.fillRect(0,0,w,h);
 
-  // background
-  ctx.clearRect(0,0,w,h);
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
-  ctx.fillRect(0,0,w,h);
+    ctx.save();
+    ctx.translate(0, SCENE_TOP_SHIFT);
 
-  // OPTIONAL: vertical shift (keep if you still need headroom)
-  ctx.save();
-  ctx.translate(0, SCENE_TOP_SHIFT);
+    const baseY = Math.round(h*0.82);
+    const xMid  = Math.round(w*0.70);
+    const yTop0 = Math.round(h*0.42);
 
-  // --- Minimal geometry ---
-  const baseY = Math.round(h*0.82);      // ground elevation
-  const xMid  = Math.round(w*0.70);      // center of the mechanism
-  const yTop0 = Math.round(h*0.42);      // un-deflected top plate location (contact plane)
+    // Ground line
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(w*0.45), baseY);
+    ctx.lineTo(Math.round(w*0.92), baseY);
+    ctx.stroke();
 
-  // Ground line (ONLY ground line)
-  ctx.strokeStyle = "#111827";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(Math.round(w*0.45), baseY);
-  ctx.lineTo(Math.round(w*0.92), baseY);
-  ctx.stroke();
+    const yMaxVis = sim ? Math.max(1e-6, sim.yMax) : Math.max(1e-6, (+inp.h.value || 1));
+    const plateMaxPix = Math.round((baseY - yTop0) * 0.60);
 
-  // Scale for visual deflection
-  const yMaxVis = sim ? Math.max(1e-6, sim.yMax) : Math.max(1e-6, (+inp.h.value || 1));
-  const plateMaxPix = Math.round((baseY - yTop0) * 0.60);
+    const yPlatePhys = Math.max(0, yNow);
+    const yPlatePix = yTop0 + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
 
-  // Plate deflection only when in contact (y >= 0)
-  const yPlatePhys = Math.max(0, yNow);
-  const yPlatePix = yTop0 + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
+    // Top plate
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xMid - 95, yPlatePix);
+    ctx.lineTo(xMid + 95, yPlatePix);
+    ctx.stroke();
 
-  // Draw a simple top plate so deflection is visible (keep or remove if you truly want only 4 items)
-  ctx.strokeStyle = "#111827";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(xMid - 95, yPlatePix);
-  ctx.lineTo(xMid + 95, yPlatePix);
-  ctx.stroke();
+    // Spring + Damper
+    const xDamper = Math.round(xMid - 35);
+    const xSpring = Math.round(xMid + 35);
+    drawDamper(xDamper, yPlatePix, baseY);
+    drawSpring(xSpring, yPlatePix, baseY);
 
-  // Spring + Damper under the weight
-  const xDamper = Math.round(xMid - 35);
-  const xSpring = Math.round(xMid + 35);
-  drawDamper(xDamper, yPlatePix, baseY);
-  drawSpring(xSpring, yPlatePix, baseY);
+    // Weight
+    const bw = 150, bh = 70;
+    let yMassTop;
+    if (yNow < 0){
+      const hIn = Math.max(1e-6, (+inp.h.value || 1));
+      const freeFallPix = clamp((-yNow)/hIn, 0, 1.5) * Math.round(h*0.25);
+      yMassTop = Math.round(yTop0 - 14 - bh - freeFallPix);
+    } else {
+      yMassTop = Math.round(yPlatePix - bh - 4);
+    }
+    const xMass = xMid - bw/2;
 
-  // Weight block (widened, centered)
-  const bw = 150, bh = 70;
-  let yMassTop;
-  if (yNow < 0){
-    // free fall: show it above the plate, proportional to -y (so h>0 starts above)
-    const hIn = Math.max(1e-6, (+inp.h.value || 1));
-    const freeFallPix = clamp((-yNow)/hIn, 0, 1.5) * Math.round(h*0.25);
-    yMassTop = Math.round(yTop0 - 14 - bh - freeFallPix);
-  } else {
-    // contact: sit on the plate
-    yMassTop = Math.round(yPlatePix - bh - 4);
+    ctx.fillStyle = "#cfd5dd";
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 3;
+    roundRect(xMass, yMassTop, bw, bh, 16);
+
+    ctx.restore();
   }
-  const xMass = xMid - bw/2;
-
-  ctx.fillStyle = "#cfd5dd";
-  ctx.strokeStyle = "#111827";
-  ctx.lineWidth = 3;
-  roundRect(xMass, yMassTop, bw, bh, 16);
-
-  // (Optional) a small downward arrow inside the weight can remain, but remove if you want pure minimalism
-  // ctx.strokeStyle = "#111827";
-  // ctx.lineWidth = 2;
-  // arrow(xMass + bw/2, yMassTop + 12, xMass + bw/2, yMassTop + bh - 10);
-
-  ctx.restore();
-}
-
-
 
   // Live recompute (debounced)
   let simReady = null;
@@ -515,8 +504,6 @@ function drawSchematic(sim, tNow, yNow, vNow){
   }
 
   function requestRecompute(){
-    // If running, do not live-recompute mid-run (keeps animation stable).
-    // You can remove this guard if you want live retuning mid-run.
     if (anim.running) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(recomputeLive, 120);
@@ -546,6 +533,16 @@ function drawSchematic(sim, tNow, yNow, vNow){
   }
 
   function start(){
+    // COMMIT INPUTS ON RUN (soft reset target)
+    lastRunInputs = {
+      W: +inp.W.value,
+      k: +inp.k.value,
+      c: +inp.c.value,
+      g: +inp.g.value,
+      h: +inp.h.value,
+      v0: +inp.v0.value
+    };
+
     if (!simReady){
       recomputeLive();
       if (!simReady) return;
@@ -619,16 +616,17 @@ function drawSchematic(sim, tNow, yNow, vNow){
     cancelAnimationFrame(raf);
     raf = null;
 
-    // restore inputs
-    inp.W.value = defaults.W;
-    inp.k.value = defaults.k;
-    inp.c.value = defaults.c;
-    inp.g.value = defaults.g;
-    inp.h.value = defaults.h;
-    inp.v0.value = defaults.v0;
+    // Reset = restore last committed Run values (soft reset), else defaults if no run yet
+    const src = lastRunInputs || defaults;
 
-   // speed.value = defaults.speed;
-  //  speedLbl.textContent = defaults.speed.toFixed(1) + "×";
+    inp.W.value  = src.W;
+    inp.k.value  = src.k;
+    inp.c.value  = src.c;
+    inp.g.value  = src.g;
+    inp.h.value  = src.h;
+    inp.v0.value = src.v0;
+
+    // NOTE: animation speed slider is intentionally NOT reset.
 
     // clear plot
     chart.data.labels = [];
@@ -658,6 +656,7 @@ function drawSchematic(sim, tNow, yNow, vNow){
 </script>
 </body>
 </html>
+
 
 
 
