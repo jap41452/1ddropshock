@@ -11,16 +11,10 @@
     --w: 920px;
     --border:#9aa4b2;
     --panel:#d9d9d9;
-    --panel2:#efefef;
     --ink:#0b1220;
     --red:#c00000;
   }
-  body{
-    margin:0;
-    background:#fff;
-    font-family: Arial, Helvetica, sans-serif;
-    color:var(--ink);
-  }
+  body{ margin:0; background:#fff; font-family: Arial, Helvetica, sans-serif; color:var(--ink); }
   .wrap{
     width: min(var(--w), calc(100vw - 16px));
     margin: 10px auto 18px;
@@ -54,16 +48,10 @@
     align-items:center;
     font-size:13px;
   }
-  .lab{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    justify-content:flex-start;
-  }
+  .lab{ display:flex; align-items:center; gap:6px; }
   .tri{
     width:0;height:0;
     border-left:7px solid transparent;
-    border-right:0 solid transparent;
     border-top:7px solid var(--red);
     transform: rotate(45deg);
     margin-left:2px;
@@ -87,7 +75,7 @@
     font-size:13px;
   }
   .sumLab{ display:flex; align-items:center; gap:6px; }
-  .sumVal{ text-align:left; font-weight:700; }
+  .sumVal{ font-weight:700; }
 
   .schem{
     background: var(--panel);
@@ -118,6 +106,7 @@
     cursor:pointer;
   }
   .btn:disabled{ opacity:.55; cursor:not-allowed; }
+
   .ctl{
     display:flex;
     align-items:center;
@@ -221,6 +210,7 @@
     <button class="btn" id="run">Run</button>
     <button class="btn" id="pause" disabled>Pause</button>
     <button class="btn" id="stop" disabled>Stop</button>
+    <button class="btn" id="reset">Reset</button>
 
     <div class="ctl">
       <div style="font-weight:700;">Animation speed</div>
@@ -248,12 +238,15 @@
     return x.toFixed(n);
   };
 
+  const defaults = { W:100, k:1000, c:4, g:386.4, h:1, v0:10, speed:1.0 };
+
   const inp = { W: $("W"), k: $("k"), c: $("c"), g: $("g"), h: $("h"), v0: $("v0") };
   const out = { fn: $("fn"), cc: $("cc"), zeta: $("zeta"), tC: $("tC"), gmax: $("gmax"), dmax: $("dmax") };
-  const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop");
+
+  const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop"), btnReset = $("reset");
   const speed = $("speed"), speedLbl = $("speedLbl");
 
-  // Chart (kept compact; styling similar to your screenshot)
+  // Chart
   const chart = new Chart($("chart").getContext("2d"), {
     type: "line",
     data: {
@@ -277,11 +270,8 @@
     }
   });
 
-  // -----------------------------
   // Physics
-  // -----------------------------
   function computeContactTime(h, v0, g){
-    // 0 = -h + v0 t + 0.5 g t^2
     const a = 0.5*g, b = v0, c = -h;
     const disc = b*b - 4*a*c;
     if (disc < 0) return NaN;
@@ -308,21 +298,17 @@
     const zeta = c/cc;
 
     const tC = (h===0) ? 0 : computeContactTime(h, v0, g);
-    const vC = isFinite(tC) ? (v0 + g*tC) : NaN;            // impact velocity at contact
+    const vC = isFinite(tC) ? (v0 + g*tC) : NaN;
     const Tn = 1/Math.max(1e-12, fn);
     const cyclesToContact = isFinite(tC) ? (fn * tC) : NaN;
 
-    // Stop time: 20 cycles from contact
     const cycles = 20;
     const tStop = (isFinite(tC) ? tC : 0) + cycles / Math.max(1e-12, fn);
 
-    // dt heuristic (compact + stable)
     const dt = Math.max(1e-5, Math.min(0.0005, 1/(fn*550 + 250)));
 
-    // Arrays
     const t = [], y = [], v = [], a = [], gRead = [];
 
-    // Free fall to contact
     const nFF = Math.max(0, Math.ceil(((isFinite(tC)?tC:0))/dt));
     for (let i=0; i<=nFF; i++){
       const tt = i*dt;
@@ -333,7 +319,6 @@
       gRead.push(Math.abs(aa)/g);
     }
 
-    // Post contact RK4
     function acc(yy,vv){ return g - (c/m)*vv - (k/m)*yy; }
     let tt = isFinite(tC) ? tC : 0;
     let yy = 0;
@@ -370,12 +355,8 @@
 
   function writeSummary(sim){
     if (!sim){
-      out.fn.textContent = "—";
-      out.cc.textContent = "—";
-      out.zeta.textContent = "—";
-      out.tC.textContent = "—";
-      out.gmax.textContent = "—";
-      out.dmax.textContent = "—";
+      out.fn.textContent="—"; out.cc.textContent="—"; out.zeta.textContent="—";
+      out.tC.textContent="—"; out.gmax.textContent="—"; out.dmax.textContent="—";
       return;
     }
     out.fn.innerHTML = fmt(sim.fn,3) + " Hz";
@@ -386,19 +367,10 @@
     out.dmax.textContent = fmt(sim.yMax,4);
   }
 
-  // -----------------------------
-  // Schematic with:
-  // - mass starting above contact by h (pre-run)
-  // - spring/damper under mass (centered)
-  // - moving top plate compressing spring/damper for y>=0
-  // - velocity arrow that scales with current v(t)
-  // - display v_contact, Tn, fn*tC
-  // -----------------------------
+  // Schematic
   const canv = $("schem");
   const ctx = canv.getContext("2d");
-
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
-
   function roundRect(x,y,w,h,r){
     const rr = Math.min(r, w/2, h/2);
     ctx.beginPath();
@@ -411,7 +383,6 @@
     ctx.fill();
     ctx.stroke();
   }
-
   function arrow(x1,y1,x2,y2){
     ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     const ang = Math.atan2(y2-y1, x2-x1), L=12;
@@ -423,7 +394,6 @@
     ctx.fillStyle = ctx.strokeStyle;
     ctx.fill();
   }
-
   function drawSpring(x, yTop, yBot){
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 2;
@@ -432,7 +402,7 @@
     const seg = dy / (turns*2);
     ctx.beginPath();
     ctx.moveTo(x, yTop);
-    let xx = x, yy = yTop;
+    let xx=x, yy=yTop;
     for (let i=0; i<turns*2; i++){
       yy += seg;
       xx = x + (i%2===0 ? -amp : amp);
@@ -441,39 +411,28 @@
     ctx.lineTo(x, yBot);
     ctx.stroke();
   }
-
   function drawDamper(x, yTop, yBot){
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 2;
     const mid = (yTop + yBot)/2;
-
-    // top rod
-    ctx.beginPath();
-    ctx.moveTo(x, yTop);
-    ctx.lineTo(x, mid-28);
-    ctx.stroke();
-
-    // piston box
-    ctx.beginPath();
-    ctx.rect(x-18, mid-28, 36, 22);
-    ctx.stroke();
-
-    // bottom rod
-    ctx.beginPath();
-    ctx.moveTo(x, mid-6);
-    ctx.lineTo(x, yBot);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x,yTop); ctx.lineTo(x, mid-28); ctx.stroke();
+    ctx.beginPath(); ctx.rect(x-18, mid-28, 36, 22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, mid-6); ctx.lineTo(x, yBot); ctx.stroke();
   }
 
+  // SHIFT ENTIRE GRAPHIC DOWN to prevent clipping
+  const SCENE_TOP_SHIFT = 38; // <- adjust as needed; solves “weight out of view” across typical h
   function drawSchematic(sim, tNow, yNow, vNow){
     const w = canv.width, h = canv.height;
 
-    // background
     ctx.clearRect(0,0,w,h);
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
     ctx.fillRect(0,0,w,h);
 
-    // geometry
+    // Apply vertical shift by drawing in a translated coordinate system
+    ctx.save();
+    ctx.translate(0, SCENE_TOP_SHIFT);
+
     const baseY = Math.round(h*0.82);
     const xMid  = Math.round(w*0.72);
     const yContact = Math.round(h*0.40);
@@ -486,7 +445,7 @@
     ctx.lineTo(Math.round(w*0.92), baseY);
     ctx.stroke();
 
-    // contact reference line
+    // contact reference
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -494,7 +453,7 @@
     ctx.lineTo(Math.round(w*0.92), yContact);
     ctx.stroke();
 
-    // height bracket h (schematic)
+    // height bracket
     const xH = Math.round(w*0.48);
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#111827";
@@ -508,43 +467,28 @@
     ctx.moveTo(xH-12, yContact);
     ctx.lineTo(xH+12, yContact);
     ctx.stroke();
+
     ctx.fillStyle = "#111827";
     ctx.font = "18px Arial";
     ctx.fillText("h", xH-34, Math.round((h*0.20 + yContact)/2));
 
-    // map physical y to pixels for plate deflection:
-    // plate stays at contact until y>=0, then plate moves down proportional to y.
-    // Use yMax to scale nicely.
     const yMaxVis = sim ? Math.max(1e-6, sim.yMax) : Math.max(1e-6, (+inp.h.value || 1));
     const plateMaxPix = Math.round((baseY - yContact) * 0.55);
 
-    // plate displacement only when y>=0
     const yPlatePhys = Math.max(0, yNow);
     const yPlatePix = yContact + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
 
-    // mass position:
-    // - during free fall, mass moves above the plate with a visible gap
-    // - after contact, mass sits on plate (touching)
-    const bw = 150;   // widened so spring/damper fit under
-    const bh = 70;
-
+    const bw = 150, bh = 70;
     let yMassTop;
     if (yNow < 0){
-      // free fall: place mass above plate, proportional to y (negative)
       const freeFallPix = clamp((-yNow) / Math.max(1e-6, (+inp.h.value || 1)), 0, 1.25) * Math.round(h*0.25);
       yMassTop = Math.round(yContact - 18 - bh - freeFallPix);
     } else {
-      // contact: mass sits on plate
       yMassTop = Math.round(yPlatePix - bh - 4);
     }
     const xMass = xMid - bw/2;
 
-    // spring/damper UNDER the mass: connect between plate and ground
-    // center them under mass
-    const xDamper = Math.round(xMid - 35);
-    const xSpring = Math.round(xMid + 35);
-
-    // draw plate (moving)
+    // plate
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -552,28 +496,28 @@
     ctx.lineTo(xMid + 95, yPlatePix);
     ctx.stroke();
 
-    // draw spring + damper between plate and ground (deflecting)
+    // spring/damper under mass
+    const xDamper = Math.round(xMid - 35);
+    const xSpring = Math.round(xMid + 35);
     drawDamper(xDamper, yPlatePix, baseY);
     drawSpring(xSpring, yPlatePix, baseY);
 
-    // draw mass
+    // mass
     ctx.fillStyle = "#cfd5dd";
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 3;
     roundRect(xMass, yMassTop, bw, bh, 16);
 
-    // W label
     ctx.fillStyle = "#111827";
     ctx.font = "22px Arial";
     ctx.fillText("W", xMass + bw/2 - 10, yMassTop + bh/2 + 8);
 
-    // W arrow down on mass
+    // W arrow
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 2;
     arrow(xMass + bw/2, yMassTop + 12, xMass + bw/2, yMassTop + bh - 6);
 
-    // velocity arrow + label (scaled)
-    // scale arrow length to vNow relative to v_contact (if available)
+    // velocity arrow, scaled
     const vRef = (sim && isFinite(sim.vC) && sim.vC>0) ? sim.vC : Math.max(1, Math.abs(+inp.v0.value || 1));
     const vScale = clamp(Math.abs(vNow)/vRef, 0, 1.5);
     const vLen = Math.round(28 + 40*vScale);
@@ -587,43 +531,42 @@
     ctx.font = "18px Arial";
     ctx.fillText("V\u2080", xV + 10, yV0 + Math.round(vLen/2));
 
-    // labels c and k
+    // labels c, k, y
     ctx.font = "18px Arial";
     ctx.fillText("c", xDamper - 28, Math.round((yPlatePix+baseY)/2));
     ctx.fillText("k", xSpring + 20, Math.round((yPlatePix+baseY)/2));
-
-    // y label
     ctx.fillText("y", xMid+92, baseY-18);
 
-    // g_out(t) label
+    // g_out(t)
     ctx.font = "16px Arial";
     ctx.fillText("g\u2092\u2094\u209C(t)", Math.round(w*0.78), Math.round(h*0.22));
 
-    // time + relationship block
-    ctx.font = "18px Arial";
-    ctx.fillText("t = " + fmt(tNow,3) + " s", Math.round(w*0.10), Math.round(h*0.12));
+    // restore transform for text overlays (keep them unshifted for layout)
+    ctx.restore();
 
-    // show relationship: v_contact, Tn, fn*tC
-    ctx.font = "14px Arial";
-    const xInfo = Math.round(w*0.10), yInfo = Math.round(h*0.20);
+    // BIGGER, readable overlay text (requested)
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText("t = " + fmt(tNow,3) + " s", Math.round(w*0.08), Math.round(h*0.14));
+
+    ctx.font = "bold 16px Arial";
+    const xInfo = Math.round(w*0.08), yInfo = Math.round(h*0.24);
     const line = (dy, txt) => ctx.fillText(txt, xInfo, yInfo + dy);
 
     if (sim){
       line(0,  "v_contact = " + fmt(sim.vC,2));
-      line(18, "Tn = 1/fn = " + fmt(sim.Tn,3) + " s");
-      line(36, "fn·t_contact = " + fmt(sim.cyclesToContact,2) + " cycles");
-      line(54, "v(t) = " + fmt(vNow,2));
+      line(20, "Tn = 1/fn = " + fmt(sim.Tn,3) + " s");
+      line(40, "fn·t_contact = " + fmt(sim.cyclesToContact,2) + " cycles");
+      line(60, "v(t) = " + fmt(vNow,2));
     } else {
-      line(0, "v_contact = —");
-      line(18,"Tn = 1/fn = —");
-      line(36,"fn·t_contact = —");
-      line(54,"v(t) = —");
+      line(0,  "v_contact = —");
+      line(20, "Tn = 1/fn = —");
+      line(40, "fn·t_contact = —");
+      line(60, "v(t) = —");
     }
   }
 
-  // -----------------------------
   // Live recompute (debounced)
-  // -----------------------------
   let simReady = null;
   let debounceTimer = null;
 
@@ -631,13 +574,16 @@
     simReady = simulateFromInputs();
     writeSummary(simReady);
 
-    // pre-run schematic: show t=0, y=-h, v=v0
-    const h = +inp.h.value || 0;
+    // Pre-run schematic: t=0, y=-h, v=v0
+    const h0 = +inp.h.value || 0;
     const v0 = +inp.v0.value || 0;
-    drawSchematic(simReady, 0, -Math.max(0,h), v0);
+    drawSchematic(simReady, 0, -Math.max(0,h0), v0);
   }
 
   function requestRecompute(){
+    // If running, do not live-recompute mid-run (keeps animation stable).
+    // You can remove this guard if you want live retuning mid-run.
+    if (anim.running) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(recomputeLive, 120);
   }
@@ -647,9 +593,7 @@
     el.addEventListener("change", requestRecompute);
   });
 
-  // -----------------------------
-  // Animation controls
-  // -----------------------------
+  // Animation
   function setButtons(running, paused){
     btnRun.disabled = running && !paused;
     btnPause.disabled = !running;
@@ -668,13 +612,11 @@
   }
 
   function start(){
-    // do not re-simulate here; use simReady (already computed from inputs)
     if (!simReady){
       recomputeLive();
       if (!simReady) return;
     }
 
-    // reset plot
     chart.data.labels = [];
     chart.data.datasets[0].data = [];
     chart.data.datasets[1].data = [];
@@ -701,7 +643,6 @@
           anim.idx++;
         }
 
-        // stop at end (already truncated to 20 cycles past contact)
         if (anim.idx >= simReady.t.length-1){
           anim.idx = simReady.t.length-1;
           updateChartTo(anim.idx);
@@ -723,18 +664,46 @@
     raf = requestAnimationFrame(step);
   }
 
-  function stop(auto=false){
+  function stop(){
     anim.running = false;
     anim.paused = false;
     setButtons(false,false);
     cancelAnimationFrame(raf);
     raf = null;
 
-    // leave final plot/schematic up
     if (simReady){
       updateChartTo(simReady.t.length-1);
       drawSchematic(simReady, simReady.t.at(-1), simReady.y.at(-1), simReady.v.at(-1));
     }
+  }
+
+  function hardReset(){
+    // stop animation
+    anim.running = false;
+    anim.paused = false;
+    setButtons(false,false);
+    cancelAnimationFrame(raf);
+    raf = null;
+
+    // restore inputs
+    inp.W.value = defaults.W;
+    inp.k.value = defaults.k;
+    inp.c.value = defaults.c;
+    inp.g.value = defaults.g;
+    inp.h.value = defaults.h;
+    inp.v0.value = defaults.v0;
+
+    speed.value = defaults.speed;
+    speedLbl.textContent = defaults.speed.toFixed(1) + "×";
+
+    // clear plot
+    chart.data.labels = [];
+    chart.data.datasets[0].data = [];
+    chart.data.datasets[1].data = [];
+    chart.update();
+
+    // recompute + redraw initial
+    recomputeLive();
   }
 
   btnRun.addEventListener("click", start);
@@ -743,7 +712,8 @@
     anim.paused = !anim.paused;
     setButtons(true, anim.paused);
   });
-  btnStop.addEventListener("click", () => stop(false));
+  btnStop.addEventListener("click", stop);
+  btnReset.addEventListener("click", hardReset);
 
   speed.addEventListener("input", () => speedLbl.textContent = (+speed.value).toFixed(1) + "×");
 
@@ -754,5 +724,6 @@
 </script>
 </body>
 </html>
+
 
 
