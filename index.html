@@ -421,150 +421,84 @@
   }
 
   // SHIFT ENTIRE GRAPHIC DOWN to prevent clipping
-  const SCENE_TOP_SHIFT = 58; // <- adjust as needed; solves “weight out of view” across typical h
-  function drawSchematic(sim, tNow, yNow, vNow){
-    const w = canv.width, h = canv.height;
+  const SCENE_TOP_SHIFT = 48; // <- adjust as needed; solves “weight out of view” across typical h
 
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
-    ctx.fillRect(0,0,w,h);
 
-    // Apply vertical shift by drawing in a translated coordinate system
-    ctx.save();
-    ctx.translate(0, SCENE_TOP_SHIFT);
+function drawSchematic(sim, tNow, yNow, vNow){
+  const w = canv.width, h = canv.height;
 
-    const baseY = Math.round(h*0.82);
-    const xMid  = Math.round(w*0.72);
-    const yContact = Math.round(h*0.40);
+  // background
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
+  ctx.fillRect(0,0,w,h);
 
-    // ground
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(w*0.12), baseY);
-    ctx.lineTo(Math.round(w*0.92), baseY);
-    ctx.stroke();
+  // OPTIONAL: vertical shift (keep if you still need headroom)
+  ctx.save();
+  ctx.translate(0, SCENE_TOP_SHIFT);
 
-    // contact reference
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(w*0.52), yContact);
-    ctx.lineTo(Math.round(w*0.92), yContact);
-    ctx.stroke();
+  // --- Minimal geometry ---
+  const baseY = Math.round(h*0.82);      // ground elevation
+  const xMid  = Math.round(w*0.70);      // center of the mechanism
+  const yTop0 = Math.round(h*0.42);      // un-deflected top plate location (contact plane)
 
-    // height bracket
-    const xH = Math.round(w*0.48);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#111827";
-    ctx.beginPath();
-    ctx.moveTo(xH, Math.round(h*0.20));
-    ctx.lineTo(xH, yContact);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(xH-12, Math.round(h*0.20));
-    ctx.lineTo(xH+12, Math.round(h*0.20));
-    ctx.moveTo(xH-12, yContact);
-    ctx.lineTo(xH+12, yContact);
-    ctx.stroke();
+  // Ground line (ONLY ground line)
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(w*0.45), baseY);
+  ctx.lineTo(Math.round(w*0.92), baseY);
+  ctx.stroke();
 
-    ctx.fillStyle = "#111827";
-    ctx.font = "18px Arial";
-    ctx.fillText("h", xH-34, Math.round((h*0.20 + yContact)/2));
+  // Scale for visual deflection
+  const yMaxVis = sim ? Math.max(1e-6, sim.yMax) : Math.max(1e-6, (+inp.h.value || 1));
+  const plateMaxPix = Math.round((baseY - yTop0) * 0.60);
 
-    const yMaxVis = sim ? Math.max(1e-6, sim.yMax) : Math.max(1e-6, (+inp.h.value || 1));
-    const plateMaxPix = Math.round((baseY - yContact) * 0.55);
+  // Plate deflection only when in contact (y >= 0)
+  const yPlatePhys = Math.max(0, yNow);
+  const yPlatePix = yTop0 + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
 
-    const yPlatePhys = Math.max(0, yNow);
-    const yPlatePix = yContact + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
+  // Draw a simple top plate so deflection is visible (keep or remove if you truly want only 4 items)
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(xMid - 95, yPlatePix);
+  ctx.lineTo(xMid + 95, yPlatePix);
+  ctx.stroke();
 
-    const bw = 150, bh = 70;
-    let yMassTop;
-    if (yNow < 0){
-      const freeFallPix = clamp((-yNow) / Math.max(1e-6, (+inp.h.value || 1)), 0, 1.25) * Math.round(h*0.25);
-      yMassTop = Math.round(yContact - 18 - bh - freeFallPix);
-    } else {
-      yMassTop = Math.round(yPlatePix - bh - 4);
-    }
-    const xMass = xMid - bw/2;
+  // Spring + Damper under the weight
+  const xDamper = Math.round(xMid - 35);
+  const xSpring = Math.round(xMid + 35);
+  drawDamper(xDamper, yPlatePix, baseY);
+  drawSpring(xSpring, yPlatePix, baseY);
 
-    // plate
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(xMid - 95, yPlatePix);
-    ctx.lineTo(xMid + 95, yPlatePix);
-    ctx.stroke();
-
-    // spring/damper under mass
-    const xDamper = Math.round(xMid - 35);
-    const xSpring = Math.round(xMid + 35);
-    drawDamper(xDamper, yPlatePix, baseY);
-    drawSpring(xSpring, yPlatePix, baseY);
-
-    // mass
-    ctx.fillStyle = "#cfd5dd";
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 3;
-    roundRect(xMass, yMassTop, bw, bh, 16);
-
-    ctx.fillStyle = "#111827";
-    ctx.font = "22px Arial";
-    ctx.fillText("W", xMass + bw/2 - 10, yMassTop + bh/2 + 8);
-
-    // W arrow
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 2;
-    arrow(xMass + bw/2, yMassTop + 12, xMass + bw/2, yMassTop + bh - 6);
-
-    // velocity arrow, scaled
-    const vRef = (sim && isFinite(sim.vC) && sim.vC>0) ? sim.vC : Math.max(1, Math.abs(+inp.v0.value || 1));
-    const vScale = clamp(Math.abs(vNow)/vRef, 0, 1.5);
-    const vLen = Math.round(28 + 40*vScale);
-
-    const xV = Math.round(w*0.58);
-    const yV0 = Math.round(h*0.50);
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 2;
-    arrow(xV, yV0, xV, yV0 + vLen);
-    ctx.fillStyle = "#111827";
-    ctx.font = "18px Arial";
-    ctx.fillText("V\u2080", xV + 10, yV0 + Math.round(vLen/2));
-
-    // labels c, k, y
-    ctx.font = "18px Arial";
-    ctx.fillText("c", xDamper - 28, Math.round((yPlatePix+baseY)/2));
-    ctx.fillText("k", xSpring + 20, Math.round((yPlatePix+baseY)/2));
-    ctx.fillText("y", xMid+92, baseY-18);
-
-    // g_out(t)
-    ctx.font = "16px Arial";
-    ctx.fillText("g\u2092\u2094\u209C(t)", Math.round(w*0.78), Math.round(h*0.22));
-
-    // restore transform for text overlays (keep them unshifted for layout)
-    ctx.restore();
-
-    // BIGGER, readable overlay text (requested)
-    ctx.fillStyle = "#111827";
-    ctx.font = "bold 18px Arial";
-    ctx.fillText("t = " + fmt(tNow,3) + " s", Math.round(w*0.08), Math.round(h*0.14));
-
-    ctx.font = "bold 16px Arial";
-    const xInfo = Math.round(w*0.08), yInfo = Math.round(h*0.24);
-    const line = (dy, txt) => ctx.fillText(txt, xInfo, yInfo + dy);
-
-    if (sim){
-      line(0,  "v_contact = " + fmt(sim.vC,2));
-      line(20, "Tn = 1/fn = " + fmt(sim.Tn,3) + " s");
-      line(40, "fn·t_contact = " + fmt(sim.cyclesToContact,2) + " cycles");
-      line(60, "v(t) = " + fmt(vNow,2));
-    } else {
-      line(0,  "v_contact = —");
-      line(20, "Tn = 1/fn = —");
-      line(40, "fn·t_contact = —");
-      line(60, "v(t) = —");
-    }
+  // Weight block (widened, centered)
+  const bw = 150, bh = 70;
+  let yMassTop;
+  if (yNow < 0){
+    // free fall: show it above the plate, proportional to -y (so h>0 starts above)
+    const hIn = Math.max(1e-6, (+inp.h.value || 1));
+    const freeFallPix = clamp((-yNow)/hIn, 0, 1.5) * Math.round(h*0.25);
+    yMassTop = Math.round(yTop0 - 14 - bh - freeFallPix);
+  } else {
+    // contact: sit on the plate
+    yMassTop = Math.round(yPlatePix - bh - 4);
   }
+  const xMass = xMid - bw/2;
+
+  ctx.fillStyle = "#cfd5dd";
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 3;
+  roundRect(xMass, yMassTop, bw, bh, 16);
+
+  // (Optional) a small downward arrow inside the weight can remain, but remove if you want pure minimalism
+  // ctx.strokeStyle = "#111827";
+  // ctx.lineWidth = 2;
+  // arrow(xMass + bw/2, yMassTop + 12, xMass + bw/2, yMassTop + bh - 10);
+
+  ctx.restore();
+}
+
+
 
   // Live recompute (debounced)
   let simReady = null;
@@ -724,6 +658,7 @@
 </script>
 </body>
 </html>
+
 
 
 
