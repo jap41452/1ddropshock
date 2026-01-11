@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SDOF Drop Shock</title>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --panelW: 1100px;
+    --border:#d7dee8;
+    --bg:#ffffff;
+    --bg2:#f6f8fb;
+    --text:#0f172a;
+    --muted:#475569;
+    --blue:#2563eb;
+    --red:#dc2626;
+    --green:#16a34a;
+  }
+  body{
+    margin:0;
+    background:#fff;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--text);
+  }
+  .wrap{
+    max-width: var(--panelW);
+    margin: 16px auto 28px;
+    padding: 0 14px;
+  }
+  .card{
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--bg);
+    box-shadow: 0 1px 0 rgba(15,23,42,.03);
+    overflow:hidden;
+  }
+  .hdr{
+    padding:12px 14px;
+    background:linear-gradient(180deg,#ffffff, #fbfcff);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .hdr h1{
+    font-size:16px;
+    margin:0;
+    letter-spacing:.2px;
+  }
+  .hdr .tag{
+    font-size:12px;
+    color:var(--muted);
+    border:1px solid var(--border);
+    padding:4px 10px;
+    border-radius:999px;
+    background:#fff;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap:12px;
+    padding:12px;
+  }
+
+  .panel{
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .panel .pt{
+    padding:10px 12px;
+    background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    font-weight:700;
+    font-size:13px;
+  }
+  .panel .pc{
+    padding:12px;
+  }
+
+  .row{
+    display:grid;
+    grid-template-columns: 1fr 120px 70px;
+    gap:10px;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  label{
+    font-size:13px;
+    color:var(--text);
+  }
+  input, select{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    font-size:13px;
+    outline:none;
+    background:#fff;
+  }
+  .unit{
+    font-size:12px;
+    color:var(--muted);
+    text-align:right;
+  }
+
+  .btnrow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:10px;
+  }
+  .btn{
+    appearance:none;
+    border:1px solid var(--border);
+    background:#fff;
+    padding:9px 12px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:13px;
+  }
+  .btn.primary{
+    background:var(--blue);
+    border-color:var(--blue);
+    color:#fff;
+  }
+  .btn.danger{
+    background:var(--red);
+    border-color:var(--red);
+    color:#fff;
+  }
+  .btn:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+  }
+
+  .speed{
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed var(--border);
+  }
+  .speed .top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .speed .top span{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .speed input[type="range"]{
+    width:100%;
+  }
+
+  .summary{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+    margin-top:10px;
+  }
+  .kv{
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:10px 12px;
+    background:#fff;
+  }
+  .kv .k{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .kv .v{
+    font-size:15px;
+    font-weight:800;
+  }
+
+  .right{
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap:12px;
+  }
+
+  .canvasBox{
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .canvasBox .pt{ /* reuse */
+    padding:10px 12px;
+    background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    font-weight:700;
+    font-size:13px;
+  }
+  canvas{
+    display:block;
+    width:100%;
+    height:300px;
+    background:#fff;
+  }
+
+  .plotBox{
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .plotBox .pt{
+    padding:10px 12px;
+    background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    font-weight:700;
+    font-size:13px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .plotBox .pt .small{
+    font-size:12px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .plotBox .pc{
+    padding:10px 10px 12px;
+  }
+  .note{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:10px;
+    line-height:1.35;
+  }
+
+  @media (max-width: 980px){
+    .grid{ grid-template-columns: 1fr; }
+    .right{ grid-template-columns: 1fr; }
+    canvas{ height:260px; }
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="hdr">
+      <h1>SDOF Drop Shock</h1>
+      <div class="tag">XL4Sim browser module</div>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: Inputs + Summary -->
+      <div class="panel">
+        <div class="pt">Inputs</div>
+        <div class="pc">
+          <div class="row">
+            <label for="units">Units</label>
+            <select id="units">
+              <option value="US" selected>US Customary (in, lbf, s)</option>
+              <option value="SI">SI (m, N, s)</option>
+            </select>
+            <div class="unit"></div>
+          </div>
+
+          <div class="row">
+            <label for="W">Weight, W</label>
+            <input id="W" type="number" step="any" value="100">
+            <div class="unit" id="uW">lbf</div>
+          </div>
+
+          <div class="row">
+            <label for="k">Spring rate, k</label>
+            <input id="k" type="number" step="any" value="1000">
+            <div class="unit" id="uk">lbf/in</div>
+          </div>
+
+          <div class="row">
+            <label for="c">Damping, c</label>
+            <input id="c" type="number" step="any" value="4">
+            <div class="unit" id="uc">lbf·s/in</div>
+          </div>
+
+          <div class="row">
+            <label for="g">Gravity, g</label>
+            <input id="g" type="number" step="any" value="386.4">
+            <div class="unit" id="ug">in/s²</div>
+          </div>
+
+          <div class="row">
+            <label for="h">Drop height, h</label>
+            <input id="h" type="number" step="any" value="1">
+            <div class="unit" id="uh">in</div>
+          </div>
+
+          <div class="row">
+            <label for="v0">Initial velocity, v0 (optional)</label>
+            <input id="v0" type="number" step="any" value="0">
+            <div class="unit" id="uv0">in/s</div>
+          </div>
+
+          <div class="btnrow">
+            <button class="btn primary" id="btnRun">Run</button>
+            <button class="btn" id="btnPause" disabled>Pause</button>
+            <button class="btn danger" id="btnStop" disabled>Stop</button>
+            <button class="btn" id="btnReset">Reset</button>
+          </div>
+
+          <div class="speed">
+            <div class="top">
+              <div style="font-weight:800; font-size:13px;">Animation speed</div>
+              <span id="speedLbl">1.0×</span>
+            </div>
+            <input id="speed" type="range" min="0.1" max="4.0" step="0.1" value="1.0">
+          </div>
+
+          <div class="panel" style="margin-top:12px;">
+            <div class="pt">Summary</div>
+            <div class="pc">
+              <div class="summary">
+                <div class="kv"><div class="k">Natural frequency, f<sub>n</sub></div><div class="v" id="fn">—</div></div>
+                <div class="kv"><div class="k">Critical damping, c<sub>c</sub></div><div class="v" id="cc">—</div></div>
+                <div class="kv"><div class="k">Damping ratio, ζ</div><div class="v" id="zeta">—</div></div>
+                <div class="kv"><div class="k">Initial contact, t</div><div class="v" id="tContact">—</div></div>
+                <div class="kv"><div class="k">Peak accel, g<sub>max</sub></div><div class="v" id="gmax">—</div></div>
+                <div class="kv"><div class="k">Max deflection, Δ<sub>max</sub></div><div class="v" id="dmax">—</div></div>
+              </div>
+
+              <div class="note">
+                Conventions: y(t) is displacement (positive downward). Contact occurs at y = 0.
+                Acceleration shown is the “accelerometer reading” in g’s (i.e., |a|/g).
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: Diagram + Plot -->
+      <div class="right">
+        <div class="canvasBox">
+          <div class="pt">Configuration + Animation</div>
+          <canvas id="scene" width="900" height="600"></canvas>
+        </div>
+
+        <div class="plotBox">
+          <div class="pt">
+            <div>Response</div>
+            <div class="small" id="runState">Ready</div>
+          </div>
+          <div class="pc">
+            <canvas id="chart" height="260"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------- Utilities ----------
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, n=3) => {
+    if (!isFinite(x)) return "—";
+    const ax = Math.abs(x);
+    if (ax >= 1000) return x.toFixed(0);
+    if (ax >= 100)  return x.toFixed(1);
+    if (ax >= 10)   return x.toFixed(2);
+    return x.toFixed(n);
+  };
+
+  // ---------- DOM ----------
+  const unitsSel = $("units");
+  const inpW = $("W"), inpk = $("k"), inpc = $("c"), inpg = $("g"), inph = $("h"), inpv0 = $("v0");
+  const uW = $("uW"), uk = $("uk"), uc = $("uc"), ug = $("ug"), uh = $("uh"), uv0 = $("uv0");
+
+  const btnRun = $("btnRun"), btnPause = $("btnPause"), btnStop = $("btnStop"), btnReset = $("btnReset");
+  const speed = $("speed"), speedLbl = $("speedLbl");
+  const runState = $("runState");
+
+  const outFn = $("fn"), outCc = $("cc"), outZ = $("zeta"), outTc = $("tContact"), outGm = $("gmax"), outDm = $("dmax");
+
+  // ---------- State ----------
+  let chart;
+  let sim = null;            // precomputed arrays
+  let anim = null;           // animation state
+  let rafId = null;
+
+  // ---------- Units ----------
+  function applyUnits(){
+    const u = unitsSel.value;
+    if (u === "US"){
+      uW.textContent = "lbf";
+      uk.textContent = "lbf/in";
+      uc.textContent = "lbf·s/in";
+      ug.textContent = "in/s²";
+      uh.textContent = "in";
+      uv0.textContent = "in/s";
+      if (+inpg.value === 9.80665) inpg.value = 386.4;
+    } else {
+      uW.textContent = "N";
+      uk.textContent = "N/m";
+      uc.textContent = "N·s/m";
+      ug.textContent = "m/s²";
+      uh.textContent = "m";
+      uv0.textContent = "m/s";
+      if (+inpg.value === 386.4) inpg.value = 9.80665;
+    }
+  }
+  unitsSel.addEventListener("change", applyUnits);
+  applyUnits();
+
+  // ---------- Physics / Simulation ----------
+  // Model:
+  //   y(t) positive downward; contact at y=0.
+  // Free fall phase (no spring/damper force):
+  //   y'' = g, y(0) = -h, y'(0)=v0 => y(t) = -h + v0*t + 0.5*g*t^2
+  // Contact time solves y(t)=0 (smallest positive root).
+  // Post-contact SDOF:
+  //   m y'' = m g - c y' - k y   (y>=0 region)
+  // => y'' = g - (c/m) y' - (k/m) y
+  //
+  // “Accelerometer reading” (what a sensor on the mass would read in g’s) is commonly taken as |y''|/g.
+  // If you prefer “proper acceleration” excluding gravity, swap to |y'' - g|/g.
+  function computeContactTime(h, v0, g){
+    // Solve 0 = -h + v0 t + 0.5 g t^2
+    const a = 0.5*g, b = v0, c = -h;
+    const disc = b*b - 4*a*c;
+    if (disc < 0) return NaN;
+    const t1 = (-b + Math.sqrt(disc)) / (2*a);
+    const t2 = (-b - Math.sqrt(disc)) / (2*a);
+    const cand = [t1, t2].filter(t => t >= 0).sort((p,q)=>p-q);
+    return cand.length ? cand[0] : NaN;
+  }
+
+  function simulate(){
+    // Read inputs
+    const W = +inpW.value;
+    const k = +inpk.value;
+    const c = +inpc.value;
+    const g = +inpg.value;
+    const h = +inph.value;
+    const v0 = +inpv0.value;
+
+    // Basic validation (keep simple: clamp to safe)
+    if (!(W>0) || !(k>0) || !(g>0) || !(h>=0)){
+      alert("Please enter positive W, k, g and nonnegative h.");
+      return null;
+    }
+
+    // Mass (consistent units): m = W/g
+    const m = W / g;
+
+    // System properties (linear)
+    const wn = Math.sqrt(k / m);           // rad/s
+    const fn = wn / (2*Math.PI);           // Hz
+    const cc = 2*m*wn;                     // critical damping
+    const zeta = c / cc;
+
+    // Contact time
+    const tC = (h === 0) ? 0 : computeContactTime(h, v0, g);
+
+    // Choose integration settings
+    // Use small dt to keep stable across zeta range and preserve peaks.
+    const dt = Math.max(1e-5, 1/(fn*400 + 200));  // heuristic
+    const tMax = Math.max(0.8, 8 / Math.max(0.5, zeta*fn + 0.2*fn + 0.5)); // heuristic horizon
+
+    // Precompute arrays
+    const t = [];
+    const y = [];
+    const v = [];
+    const a = [];
+    const gRead = [];  // |a|/g
+
+    // Free fall segment (0..tC)
+    let tt = 0;
+    let y0 = -h;
+    let vff = v0;
+
+    const nFF = isFinite(tC) ? Math.ceil(tC/dt) : 0;
+    for (let i=0; i<=nFF; i++){
+      tt = i*dt;
+      const yy = -h + v0*tt + 0.5*g*tt*tt;
+      const vv = v0 + g*tt;
+      const aa = g;
+      t.push(tt);
+      y.push(yy);
+      v.push(vv);
+      a.push(aa);
+      gRead.push(Math.abs(aa)/g);
+    }
+
+    // Initial conditions at contact
+    const yC = 0;
+    const vC = isFinite(tC) ? (v0 + g*tC) : v0;
+
+    // Post-contact integration via RK4
+    // State: [y, v]
+    function deriv(state){
+      const yy = state[0];
+      const vv = state[1];
+      const acc = g - (c/m)*vv - (k/m)*yy;
+      return [vv, acc];
+    }
+
+    let state = [yC, vC];
+    tt = isFinite(tC) ? tC : 0;
+
+    const nPost = Math.ceil((tMax - tt)/dt);
+    for (let i=0; i<nPost; i++){
+      // RK4
+      const s1 = state;
+      const k1 = deriv(s1);
+
+      const s2 = [s1[0] + 0.5*dt*k1[0], s1[1] + 0.5*dt*k1[1]];
+      const k2 = deriv(s2);
+
+      const s3 = [s1[0] + 0.5*dt*k2[0], s1[1] + 0.5*dt*k2[1]];
+      const k3 = deriv(s3);
+
+      const s4 = [s1[0] + dt*k3[0], s1[1] + dt*k3[1]];
+      const k4 = deriv(s4);
+
+      state = [
+        s1[0] + (dt/6)*(k1[0] + 2*k2[0] + 2*k3[0] + k4[0]),
+        s1[1] + (dt/6)*(k1[1] + 2*k2[1] + 2*k3[1] + k4[1])
+      ];
+      tt += dt;
+
+      t.push(tt);
+      y.push(state[0]);
+      v.push(state[1]);
+      const acc = g - (c/m)*state[1] - (k/m)*state[0];
+      a.push(acc);
+      gRead.push(Math.abs(acc)/g);
+
+      // Optional early stop if it’s clearly settled
+      // (small motion for a sustained window)
+      if (i > 400){
+        const idx = y.length - 1;
+        const yWin = Math.max(Math.abs(y[idx]), Math.abs(y[idx-50]||0), Math.abs(y[idx-100]||0));
+        const vWin = Math.max(Math.abs(v[idx]), Math.abs(v[idx-50]||0));
+        if (yWin < 1e-4*Math.max(1, h) && vWin < 1e-4*Math.max(1, Math.abs(vC))) {
+          break;
+        }
+      }
+    }
+
+    // Summaries
+    const yMax = Math.max(...y.filter(yy => isFinite(yy)));
+    const gMax = Math.max(...gRead.filter(gg => isFinite(gg)));
+
+    return {
+      inputs:{W,k,c,g,h,v0},
+      m, wn, fn, cc, zeta,
+      tC,
+      t, y, v, a, gRead,
+      yMax, gMax
+    };
+  }
+
+  // ---------- Chart ----------
+  function buildChart(){
+    const ctx = $("chart").getContext("2d");
+    chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Displacement, y", data: [], yAxisID: "yDisp", borderWidth: 2, pointRadius: 0, tension: 0.05 },
+          { label: "Acceleration (g)", data: [], yAxisID: "yG", borderWidth: 2, pointRadius: 0, borderDash: [6,4], tension: 0.05 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top" },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y,3)}` } }
+        },
+        scales: {
+          x: { title: { display: true, text: "Time, sec" }, ticks: { maxTicksLimit: 10 } },
+          yDisp: { position: "left", title: { display: true, text: "Displacement" }, grid: { drawOnChartArea: true } },
+          yG: { position: "right", title: { display: true, text: "Accelerometer (g’s)" }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  }
+  buildChart();
+
+  function updateChartToIndex(idx){
+    if (!sim) return;
+    const t = sim.t.slice(0, idx+1);
+    const y = sim.y.slice(0, idx+1);
+    const gR = sim.gRead.slice(0, idx+1);
+
+    chart.data.labels = t.map(x => x.toFixed(4));
+    chart.data.datasets[0].data = y;
+    chart.data.datasets[1].data = gR;
+    chart.update();
+  }
+
+  // ---------- Canvas animation ----------
+  const canvas = $("scene");
+  const c2d = canvas.getContext("2d");
+
+  function drawScene(tNow, yNow){
+    // Responsive draw to actual CSS size
+    const rect = canvas.getBoundingClientRect();
+    const Wpx = Math.max(1, Math.floor(rect.width));
+    const Hpx = Math.max(1, Math.floor(rect.height));
+    if (canvas.width !== Wpx*2 || canvas.height !== Hpx*2){
+      canvas.width = Wpx*2;
+      canvas.height = Hpx*2;
+    }
+    c2d.setTransform(2,0,0,2,0,0); // scale for sharpness
+
+    const w = Wpx, h = Hpx;
+
+    // Background
+    c2d.clearRect(0,0,w,h);
+
+    // Layout
+    const leftPad = 24;
+    const rightPad = 18;
+    const topPad = 18;
+    const baseY = h - 42;
+
+    // Ground
+    c2d.strokeStyle = "#0f172a";
+    c2d.lineWidth = 2;
+    c2d.beginPath();
+    c2d.moveTo(leftPad, baseY);
+    c2d.lineTo(w-rightPad, baseY);
+    c2d.stroke();
+
+    // Spring/damper anchor line
+    const xMid = Math.round(w*0.68);
+    const yAnchor = baseY;
+    const yContact = Math.round(h*0.32);
+
+    // Draw vertical guide
+    c2d.strokeStyle = "#94a3b8";
+    c2d.lineWidth = 1;
+    c2d.beginPath();
+    c2d.moveTo(xMid, yContact);
+    c2d.lineTo(xMid, yAnchor);
+    c2d.stroke();
+
+    // Map physical y (down) to pixels (down), with a cap for display
+    // Contact at y=0 maps to yContact.
+    const dispScale = 0.45*(yAnchor - yContact);  // pixels for "typical" max
+    const yPix = yContact + clamp(yNow / Math.max(1e-9, (sim ? sim.yMax : 1)) , -1.2, 1.2) * dispScale;
+
+    // Mass block
+    const blockW = 74, blockH = 54;
+    const xBlock = xMid - blockW/2;
+    const yBlock = yPix - blockH/2;
+
+    // Spring (zigzag) between contact line and mass bottom
+    const springTop = yContact;
+    const springBot = yBlock + blockH/2;
+    drawSpring(xMid-40, springTop, xMid-40, springBot, 9, 10);
+
+    // Damper (simple) next to spring
+    drawDamper(xMid+40, springTop, xMid+40, springBot);
+
+    // Mass
+    c2d.fillStyle = "#e5e7eb";
+    c2d.strokeStyle = "#111827";
+    c2d.lineWidth = 2;
+    roundRect(c2d, xBlock, yBlock, blockW, blockH, 10, true, true);
+
+    // Weight label
+    c2d.fillStyle = "#0f172a";
+    c2d.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    c2d.fillText("W", xBlock + blockW/2 - 6, yBlock + blockH/2 + 4);
+
+    // Height arrow (show h from start to contact) - schematic
+    const xH = Math.round(w*0.18);
+    const yTop = topPad + 18;
+    const yBot = yContact;
+    c2d.strokeStyle = "#0f172a";
+    c2d.lineWidth = 1.5;
+    arrow(xH, yTop, xH, yBot);
+    c2d.fillStyle = "#0f172a";
+    c2d.fillText("h", xH + 8, (yTop+yBot)/2);
+
+    // Velocity arrow near mass (schematic)
+    const xV = xMid - 110;
+    const yV = yContact + 18;
+    c2d.strokeStyle = "#0f172a";
+    c2d.lineWidth = 1.5;
+    arrow(xV, yV, xV, yV+42);
+    c2d.fillText("v₀", xV + 8, yV + 26);
+
+    // Text overlay for time
+    c2d.fillStyle = "#475569";
+    c2d.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    c2d.fillText(`t = ${fmt(tNow,3)} s`, leftPad, topPad);
+  }
+
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+  function roundRect(ctx, x, y, w, h, r, fill, stroke){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  }
+
+  function arrow(x1,y1,x2,y2){
+    c2d.beginPath();
+    c2d.moveTo(x1,y1);
+    c2d.lineTo(x2,y2);
+    c2d.stroke();
+    const ang = Math.atan2(y2-y1, x2-x1);
+    const L = 8;
+    c2d.beginPath();
+    c2d.moveTo(x2, y2);
+    c2d.lineTo(x2 - L*Math.cos(ang - Math.PI/7), y2 - L*Math.sin(ang - Math.PI/7));
+    c2d.lineTo(x2 - L*Math.cos(ang + Math.PI/7), y2 - L*Math.sin(ang + Math.PI/7));
+    c2d.closePath();
+    c2d.fillStyle = c2d.strokeStyle;
+    c2d.fill();
+  }
+
+  function drawSpring(x1,y1,x2,y2,turns,amp){
+    const dy = y2-y1;
+    const seg = dy / (turns*2);
+    c2d.strokeStyle = "#0f172a";
+    c2d.lineWidth = 2;
+
+    c2d.beginPath();
+    c2d.moveTo(x1, y1);
+    let x = x1, y = y1;
+    for (let i=0; i<turns*2; i++){
+      y += seg;
+      x = x1 + (i%2===0 ? -amp : amp);
+      c2d.lineTo(x, y);
+    }
+    c2d.lineTo(x2, y2);
+    c2d.stroke();
+  }
+
+  function drawDamper(x,y1, x2,y2){
+    c2d.strokeStyle = "#0f172a";
+    c2d.lineWidth = 2;
+
+    const mid = (y1+y2)/2;
+    // top rod
+    c2d.beginPath();
+    c2d.moveTo(x, y1);
+    c2d.lineTo(x, mid-22);
+    c2d.stroke();
+    // piston box
+    c2d.beginPath();
+    c2d.rect(x-14, mid-22, 28, 20);
+    c2d.stroke();
+    // piston rod
+    c2d.beginPath();
+    c2d.moveTo(x, mid-2);
+    c2d.lineTo(x, y2);
+    c2d.stroke();
+  }
+
+  // ---------- Run / Pause / Stop ----------
+  function setButtons(running, paused){
+    btnRun.disabled = running && !paused;
+    btnPause.disabled = !running;
+    btnStop.disabled = !running;
+    btnPause.textContent = paused ? "Resume" : "Pause";
+  }
+
+  function resetOutputs(){
+    outFn.textContent = "—";
+    outCc.textContent = "—";
+    outZ.textContent = "—";
+    outTc.textContent = "—";
+    outGm.textContent = "—";
+    outDm.textContent = "—";
+  }
+
+  function writeSummary(){
+    if (!sim){ resetOutputs(); return; }
+    const u = unitsSel.value;
+    const fnUnit = "Hz";
+    outFn.innerHTML = `${fmt(sim.fn,3)} ${fnUnit}`;
+    outCc.textContent = fmt(sim.cc,3);
+    outZ.innerHTML = `${fmt(sim.zeta*100,2)} %`;
+    outTc.innerHTML = `${fmt(sim.tC,4)} s`;
+    outGm.innerHTML = `${fmt(sim.gMax,3)} g`;
+    outDm.innerHTML = `${fmt(sim.yMax,4)} ${u==="US" ? "in" : "m"}`;
+  }
+
+  function startAnimation(){
+    if (!sim) return;
+
+    // reset animation index
+    anim = {
+      idx: 0,
+      t0: performance.now(),
+      paused: false
+    };
+
+    setButtons(true, false);
+    runState.textContent = "Running";
+
+    const step = () => {
+      if (!anim) return;
+
+      const spd = +speed.value;
+      const now = performance.now();
+
+      if (!anim.paused){
+        // Advance index based on real time scaled by speed
+        const dtMs = (now - anim.t0) * spd;
+        anim.t0 = now;
+
+        // convert ms to seconds and step through sim.t
+        const dtSec = dtMs / 1000;
+        // advance idx so that time progresses by dtSec
+        const tTarget = sim.t[anim.idx] + dtSec;
+        while (anim.idx < sim.t.length-1 && sim.t[anim.idx] < tTarget){
+          anim.idx++;
+        }
+      } else {
+        anim.t0 = now;
+      }
+
+      updateChartToIndex(anim.idx);
+      drawScene(sim.t[anim.idx], sim.y[anim.idx]);
+
+      rafId = requestAnimationFrame(step);
+    };
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(step);
+  }
+
+  function stopAnimation(){
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    anim = null;
+    setButtons(false, false);
+    runState.textContent = "Stopped";
+    if (sim){
+      // keep last computed plot, but show full result
+      updateChartToIndex(sim.t.length-1);
+      drawScene(sim.t[sim.t.length-1], sim.y[sim.y.length-1]);
+    } else {
+      chart.data.labels = [];
+      chart.data.datasets[0].data = [];
+      chart.data.datasets[1].data = [];
+      chart.update();
+      drawScene(0, -Math.max(0, +inph.value || 0));
+    }
+  }
+
+  // ---------- Events ----------
+  speed.addEventListener("input", () => {
+    speedLbl.textContent = `${(+speed.value).toFixed(1)}×`;
+  });
+
+  btnRun.addEventListener("click", () => {
+    sim = simulate();
+    if (!sim) return;
+
+    writeSummary();
+
+    // Initialize chart empty; animation will fill it
+    chart.data.labels = [];
+    chart.data.datasets[0].data = [];
+    chart.data.datasets[1].data = [];
+    chart.update();
+
+    runState.textContent = "Running";
+    startAnimation();
+  });
+
+  btnPause.addEventListener("click", () => {
+    if (!anim) return;
+    anim.paused = !anim.paused;
+    setButtons(true, anim.paused);
+    runState.textContent = anim.paused ? "Paused" : "Running";
+  });
+
+  btnStop.addEventListener("click", () => {
+    stopAnimation();
+  });
+
+  btnReset.addEventListener("click", () => {
+    stopAnimation();
+    sim = null;
+    resetOutputs();
+    drawScene(0, -Math.max(0, +inph.value || 0));
+    runState.textContent = "Ready";
+  });
+
+  // Initial draw
+  resetOutputs();
+  drawScene(0, -Math.max(0, +inph.value || 0));
+})();
+</script>
+</body>
+</html>
