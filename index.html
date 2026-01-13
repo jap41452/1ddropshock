@@ -150,7 +150,6 @@
   </div>
 
   <div class="upper">
-    <!-- Inputs -->
     <div>
       <div class="rows" style="padding:4px 2px 0;">
         <div class="lab"><div style="width:18px;text-align:right;font-weight:700;">W</div><div class="tri"></div></div>
@@ -173,7 +172,6 @@
       </div>
     </div>
 
-    <!-- Summary -->
     <div>
       <div class="summaryRows" style="padding:4px 2px 0;">
         <div class="sumLab"><div style="width:64px;font-weight:700;">f<sub>n</sub></div><div class="tri"></div></div>
@@ -200,7 +198,6 @@
       </div>
     </div>
 
-    <!-- Schematic -->
     <div class="schem">
       <canvas id="schem" width="440" height="300"></canvas>
     </div>
@@ -211,6 +208,9 @@
     <button class="btn" id="pause" disabled>Pause</button>
     <button class="btn" id="stop" disabled>Stop</button>
     <button class="btn" id="reset">Reset</button>
+
+    <button class="btn" id="btnJson" disabled>JSON</button>
+    <button class="btn" id="btnCsv" disabled>CSV</button>
 
     <div class="ctl">
       <div style="font-weight:700;">Animation speed</div>
@@ -244,15 +244,18 @@
   const out = { fn: $("fn"), cc: $("cc"), zeta: $("zeta"), tC: $("tC"), gmax: $("gmax"), dmax: $("dmax") };
 
   const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop"), btnReset = $("reset");
+  // Export Buttons
+  const btnJson = $("btnJson"), btnCsv = $("btnCsv");
+  
   const speed = $("speed"), speedLbl = $("speedLbl");
 
+  // Soft-reset target: inputs as of the last time Run was clicked
+  let lastRunInputs = null;
+  
+  // Data snapshot for export
+  let frozenRunData = null; 
 
-
-// Soft-reset target: inputs as of the last time Run was clicked
-let lastRunInputs = null;
- 
-
- // Chart
+  // Chart
   const chart = new Chart($("chart").getContext("2d"), {
     type: "line",
     data: {
@@ -389,17 +392,6 @@ let lastRunInputs = null;
     ctx.fill();
     ctx.stroke();
   }
-  function arrow(x1,y1,x2,y2){
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    const ang = Math.atan2(y2-y1, x2-x1), L=12;
-    ctx.beginPath();
-    ctx.moveTo(x2,y2);
-    ctx.lineTo(x2 - L*Math.cos(ang - Math.PI/7), y2 - L*Math.sin(ang - Math.PI/7));
-    ctx.lineTo(x2 - L*Math.cos(ang + Math.PI/7), y2 - L*Math.sin(ang + Math.PI/7));
-    ctx.closePath();
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fill();
-  }
   function drawSpring(x, yTop, yBot){
     ctx.strokeStyle = "#111827";
     ctx.lineWidth = 2;
@@ -427,7 +419,7 @@ let lastRunInputs = null;
   }
 
   // SHIFT ENTIRE GRAPHIC DOWN to prevent clipping
-  const SCENE_TOP_SHIFT = 48; // <- adjust as needed; solves “weight out of view” across typical h
+  const SCENE_TOP_SHIFT = 48; 
 
 
 function drawSchematic(sim, tNow, yNow, vNow){
@@ -438,7 +430,7 @@ function drawSchematic(sim, tNow, yNow, vNow){
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim() || "#d9d9d9";
   ctx.fillRect(0,0,w,h);
 
-  // OPTIONAL: vertical shift (keep if you still need headroom)
+  // OPTIONAL: vertical shift
   ctx.save();
   ctx.translate(0, SCENE_TOP_SHIFT);
 
@@ -447,7 +439,7 @@ function drawSchematic(sim, tNow, yNow, vNow){
   const xMid  = Math.round(w*0.70);      // center of the mechanism
   const yTop0 = Math.round(h*0.42);      // un-deflected top plate location (contact plane)
 
-  // Ground line (ONLY ground line)
+  // Ground line
   ctx.strokeStyle = "#111827";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -463,7 +455,7 @@ function drawSchematic(sim, tNow, yNow, vNow){
   const yPlatePhys = Math.max(0, yNow);
   const yPlatePix = yTop0 + clamp(yPlatePhys / yMaxVis, 0, 1.25) * plateMaxPix;
 
-  // Draw a simple top plate so deflection is visible (keep or remove if you truly want only 4 items)
+  // Top plate
   ctx.strokeStyle = "#111827";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -477,16 +469,16 @@ function drawSchematic(sim, tNow, yNow, vNow){
   drawDamper(xDamper, yPlatePix, baseY);
   drawSpring(xSpring, yPlatePix, baseY);
 
-  // Weight block (widened, centered)
+  // Weight block
   const bw = 150, bh = 70;
   let yMassTop;
   if (yNow < 0){
-    // free fall: show it above the plate, proportional to -y (so h>0 starts above)
+    // free fall
     const hIn = Math.max(1e-6, (+inp.h.value || 1));
     const freeFallPix = clamp((-yNow)/hIn, 0, 1.5) * Math.round(h*0.25);
     yMassTop = Math.round(yTop0 - 14 - bh - freeFallPix);
   } else {
-    // contact: sit on the plate
+    // contact
     yMassTop = Math.round(yPlatePix - bh - 4);
   }
   const xMass = xMid - bw/2;
@@ -496,15 +488,8 @@ function drawSchematic(sim, tNow, yNow, vNow){
   ctx.lineWidth = 3;
   roundRect(xMass, yMassTop, bw, bh, 16);
 
-  // (Optional) a small downward arrow inside the weight can remain, but remove if you want pure minimalism
-  // ctx.strokeStyle = "#111827";
-  // ctx.lineWidth = 2;
-  // arrow(xMass + bw/2, yMassTop + 12, xMass + bw/2, yMassTop + bh - 10);
-
   ctx.restore();
 }
-
-
 
   // Live recompute (debounced)
   let simReady = null;
@@ -521,8 +506,6 @@ function drawSchematic(sim, tNow, yNow, vNow){
   }
 
   function requestRecompute(){
-    // If running, do not live-recompute mid-run (keeps animation stable).
-    // You can remove this guard if you want live retuning mid-run.
     if (anim.running) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(recomputeLive, 120);
@@ -552,23 +535,25 @@ function drawSchematic(sim, tNow, yNow, vNow){
   }
 
   function start(){
-   
-  // Commit current inputs as the "last run" state (used by Reset)
-  lastRunInputs = {
-    W:  +inp.W.value,
-    k:  +inp.k.value,
-    c:  +inp.c.value,
-    g:  +inp.g.value,
-    h:  +inp.h.value,
-    v0: +inp.v0.value
-  };
+    // Commit current inputs as the "last run" state (used by Reset)
+    lastRunInputs = {
+      W:  +inp.W.value,
+      k:  +inp.k.value,
+      c:  +inp.c.value,
+      g:  +inp.g.value,
+      h:  +inp.h.value,
+      v0: +inp.v0.value
+    };
 
-
-
- if (!simReady){
-      recomputeLive();
-      if (!simReady) return;
+    if (!simReady){
+       recomputeLive();
+       if (!simReady) return;
     }
+
+    // Capture snapshot for Export
+    frozenRunData = simReady;
+    btnJson.disabled = false;
+    btnCsv.disabled = false;
 
     chart.data.labels = [];
     chart.data.datasets[0].data = [];
@@ -638,6 +623,11 @@ function drawSchematic(sim, tNow, yNow, vNow){
     cancelAnimationFrame(raf);
     raf = null;
 
+    // Disable exports on reset
+    btnJson.disabled = true;
+    btnCsv.disabled = true;
+    frozenRunData = null;
+
     // restore inputs to the last Run values (soft reset)
     const src = lastRunInputs || defaults;
 
@@ -648,11 +638,6 @@ function drawSchematic(sim, tNow, yNow, vNow){
     inp.h.value  = src.h;
     inp.v0.value = src.v0;
 
-
-
-   // speed.value = defaults.speed;
-  //  speedLbl.textContent = defaults.speed.toFixed(1) + "×";
-
     // clear plot
     chart.data.labels = [];
     chart.data.datasets[0].data = [];
@@ -662,6 +647,58 @@ function drawSchematic(sim, tNow, yNow, vNow){
     // recompute + redraw initial
     recomputeLive();
   }
+
+  // --- EXPORT FUNCTIONS ---
+
+  function downloadFile(content, fileName, mimeType) {
+    const a = document.createElement("a");
+    const blob = new Blob([content], {type: mimeType});
+    const url = URL.createObjectURL(blob);
+    a.setAttribute("href", url);
+    a.setAttribute("download", fileName);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  btnJson.addEventListener("click", () => {
+    if(!frozenRunData) return;
+    const d = frozenRunData;
+    const exportObj = {
+      provenance: {
+        module: "SDOF Drop Shock",
+        version: "1.0",
+        timestamp: new Date().toISOString()
+      },
+      inputs: {
+        W: d.W, k: d.k, c: d.c, g: d.g, 
+        h: d.h, v0: d.v0
+      },
+      derivedValues: {
+        m: d.m, wn: d.wn, fn: d.fn, cc: d.cc, zeta: d.zeta, 
+        tC: d.tC, vC: d.vC, Tn: d.Tn, tStop: d.tStop,
+        maxima: { gMax: d.gMax, yMax: d.yMax }
+      },
+      results: {
+        t: d.t,
+        y: d.y,
+        a_g: d.a.map(val => val/d.g) // Exporting acceleration in Gs (signed)
+      }
+    };
+    downloadFile(JSON.stringify(exportObj, null, 2), "drop_shock_data.json", "application/json");
+  });
+
+  btnCsv.addEventListener("click", () => {
+    if(!frozenRunData) return;
+    const d = frozenRunData;
+    // Columns: Time, Displacement, Acceleration(g)
+    let csv = "t_sec,disp,accel_g\n";
+    for(let i=0; i<d.t.length; i++){
+      // Note: converting raw acceleration 'a' to Gs by dividing by gravity input 'g'
+      csv += `${d.t[i]},${d.y[i]},${d.a[i]/d.g}\n`;
+    }
+    downloadFile(csv, "drop_shock_history.csv", "text/csv");
+  });
+
 
   btnRun.addEventListener("click", start);
   btnPause.addEventListener("click", () => {
