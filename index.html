@@ -209,8 +209,10 @@
     <button class="btn" id="stop" disabled>Stop</button>
     <button class="btn" id="reset">Reset</button>
 
-    <button class="btn" id="btnJson" disabled>JSON</button>
-    <button class="btn" id="btnCsv" disabled>CSV</button>
+
+<button class="btn" id="btnJson" disabled>Export JSON</button>
+<button class="btn" id="btnImport">Import JSON</button>
+<button class="btn" id="btnCsv" disabled>Export CSV</button>
 
     <div class="ctl">
       <div style="font-weight:700;">Animation speed</div>
@@ -243,9 +245,12 @@
   const inp = { W: $("W"), k: $("k"), c: $("c"), g: $("g"), h: $("h"), v0: $("v0") };
   const out = { fn: $("fn"), cc: $("cc"), zeta: $("zeta"), tC: $("tC"), gmax: $("gmax"), dmax: $("dmax") };
 
-  const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop"), btnReset = $("reset");
-  // Export Buttons
-  const btnJson = $("btnJson"), btnCsv = $("btnCsv");
+const btnRun = $("run"), btnPause = $("pause"), btnStop = $("stop"), btnReset = $("reset");
+// Export Buttons
+const btnJson = $("btnJson"), btnImport = $("btnImport"), btnCsv = $("btnCsv");
+
+
+
   
   const speed = $("speed"), speedLbl = $("speedLbl");
 
@@ -669,6 +674,10 @@ function drawSchematic(sim, tNow, yNow, vNow){
         version: "1.0",
         timestamp: new Date().toISOString()
       },
+
+
+
+
       inputs: {
         W: d.W, k: d.k, c: d.c, g: d.g, 
         h: d.h, v0: d.v0
@@ -699,6 +708,53 @@ function drawSchematic(sim, tNow, yNow, vNow){
     downloadFile(csv, "drop_shock_history.csv", "text/csv");
   });
 
+btnImport.addEventListener("click", () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const imported = JSON.parse(evt.target.result);
+        
+        // Check if this has the expected structure
+        if (!imported.inputs) {
+          alert("Invalid JSON format: missing 'inputs' object");
+          return;
+        }
+        
+        // Populate input fields from imported data
+        const inputs = imported.inputs;
+        if (inputs.W !== undefined)  inp.W.value  = inputs.W;
+        if (inputs.k !== undefined)  inp.k.value  = inputs.k;
+        if (inputs.c !== undefined)  inp.c.value  = inputs.c;
+        if (inputs.g !== undefined)  inp.g.value  = inputs.g;
+        if (inputs.h !== undefined)  inp.h.value  = inputs.h;
+        if (inputs.v0 !== undefined) inp.v0.value = inputs.v0;
+        
+        // Trigger recompute to update summary and schematic
+        recomputeLive();
+        
+        alert("Configuration imported successfully!");
+        
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("Error importing JSON: " + err.message);
+      }
+    };
+    
+    reader.readAsText(file);
+  };
+  
+  input.click();
+});
+
+
 
   btnRun.addEventListener("click", start);
   btnPause.addEventListener("click", () => {
@@ -718,6 +774,7 @@ function drawSchematic(sim, tNow, yNow, vNow){
 </script>
 </body>
 </html>
+
 
 
 
